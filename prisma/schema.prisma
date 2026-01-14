@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("STUDENT") 
+  isActive  Boolean  @default(true)
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessonsCompleted StudentLessonProgress[]
+  quizAttempts     QuizAttempt[]
+  results          Result[]
+  
+  createdLessons   Lesson[]
+  createdQuizzes   Quiz[]
+  
+  // New: Subscriptions
+  subscriptions    Subscription[] @relation("StudentSubscriptions")
+  subscribers      Subscription[] @relation("TeacherSubscribers")
+
+  // Phase 3: Advanced Features
+  bankQuestions   BankQuestion[] @relation("TeacherBankQuestions")
+  assignments     Assignment[]   @relation("TeacherAssignments")
+  submissions     AssignmentSubmission[] @relation("StudentSubmissions")
+
+  // Phase 5: Admin & Management
+  activityLogs    ActivityLog[]
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   // e.g., "DELETE_USER", "LOGIN", "CREATE_LESSON"
+  details   String?  // JSON string for extra info
+  ip        String?
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  studentId String
+  student   User     @relation("StudentSubscriptions", fields: [studentId], references: [id])
+  teacherId String
+  teacher   User     @relation("TeacherSubscribers", fields: [teacherId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, teacherId])
+}
+
+model Stage {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  grades    Grade[]
+}
+
+model Grade {
+  id        String   @id @default(uuid())
+  name      String
+  stageId   String
+  stage     Stage    @relation(fields: [stageId], references: [id])
+  subjects  Subject[]
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  name      String
+  gradeId   String
+  grade     Grade    @relation(fields: [gradeId], references: [id])
+  units     Unit[]
+  
+  // Phase 3
+  bankQuestions BankQuestion[]
+  assignments   Assignment[]
+}
+
+model Unit {
+  id        String   @id @default(uuid())
+  name      String
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  lessons   Lesson[]
+
+  // Phase 3
+  bankQuestions BankQuestion[]
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String
+  unitId      String
+  unit        Unit     @relation(fields: [unitId], references: [id])
+  
+  videoUrl    String?
+  content     String?
+  pdfUrl      String?
+  
+  teacherId   String
+  teacher     User     @relation(fields: [teacherId], references: [id])
+  
+  images      LessonImage[]
+  quiz        Quiz?
+  
+  progress    StudentLessonProgress[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  published   Boolean  @default(false)
+  isDeleted   Boolean  @default(false)
+}
+
+model LessonImage {
+  id        String @id @default(uuid())
+  url       String
+  lessonId  String
+  lesson    Lesson @relation(fields: [lessonId], references: [id])
+}
+
+model Quiz {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  
+  lessonId    String?  @unique
+  lesson      Lesson?  @relation(fields: [lessonId], references: [id])
+  
+  teacherId   String
+  teacher     User     @relation(fields: [teacherId], references: [id])
+  
+  questions   Question[]
+  attempts    QuizAttempt[]
+  results     Result[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  published   Boolean  @default(false)
+  isDeleted   Boolean  @default(false)
+}
+
+model Question {
+  id        String       @id @default(uuid())
+  text      String
+  type      String       
+  points    Int          @default(1)
+  quizId    String
+  quiz      Quiz         @relation(fields: [quizId], references: [id])
+  options   Option[]
+}
+
+model Option {
+  id         String   @id @default(uuid())
+  text       String
+  isCorrect  Boolean  @default(false)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+}
+
+model QuizAttempt {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  
+  answers     QuizAnswer[]
+  result      Result?
+}
+
+model QuizAnswer {
+  id               String      @id @default(uuid())
+  attemptId        String
+  attempt          QuizAttempt @relation(fields: [attemptId], references: [id])
+  questionId       String
+  selectedOptionId String?
+}
+
+model Result {
+  id        String      @id @default(uuid())
+  score     Float
+  total     Float
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  quizId    String
+  quiz      Quiz        @relation(fields: [quizId], references: [id])
+  attemptId String      @unique
+  attempt   QuizAttempt @relation(fields: [attemptId], references: [id])
+  
+  passed    Boolean
+  createdAt DateTime    @default(now())
+}
+
+model StudentLessonProgress {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id])
+  
+  completed Boolean  @default(false)
+  lastViewedAt DateTime @default(now())
+  
+  @@unique([userId, lessonId])
+}
+
+// --- PHASE 3: ADVANCED FEATURES ---
+
+model BankQuestion {
+  id          String   @id @default(uuid())
+  text        String
+  difficulty  String   @default("MEDIUM") // EASY, MEDIUM, HARD
+  
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  unitId      String?
+  unit        Unit?    @relation(fields: [unitId], references: [id])
+  
+  teacherId   String
+  teacher     User     @relation("TeacherBankQuestions", fields: [teacherId], references: [id])
+  
+  options     BankOption[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+}
+
+model BankOption {
+  id             String       @id @default(uuid())
+  text           String
+  isCorrect      Boolean      @default(false)
+  bankQuestionId String
+  bankQuestion   BankQuestion @relation(fields: [bankQuestionId], references: [id])
+}
+
+model Assignment {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  fileUrl     String?  // Optional attachment from teacher
+  
+  dueDate     DateTime
+  published   Boolean  @default(false)
+  isDeleted   Boolean  @default(false)
+  
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  teacherId   String
+  teacher     User     @relation("TeacherAssignments", fields: [teacherId], references: [id])
+  
+  submissions AssignmentSubmission[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AssignmentSubmission {
+  id             String   @id @default(uuid())
+  assignmentId   String
+  assignment     Assignment @relation(fields: [assignmentId], references: [id])
+  studentId      String
+  student        User     @relation("StudentSubmissions", fields: [studentId], references: [id])
+  
+  fileUrl        String   // Student uploaded work
+  content        String?  // Optional text comment
+  
+  status         String   @default("SUBMITTED") // SUBMITTED, GRADED
+  score          Float?
+  feedback       String?
+  
+  submittedAt    DateTime @default(now())
+  gradedAt       DateTime?
+}
