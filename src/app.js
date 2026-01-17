@@ -12,6 +12,8 @@ import bankRoutes from './routes/bank.routes.js';
 import homeworkRoutes from './routes/homework.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import configRoutes from './routes/config.routes.js';
+import qaRoutes from './routes/qa.routes.js';
 
 const app = express();
 
@@ -33,6 +35,8 @@ app.use('/api/bank', bankRoutes);
 app.use('/api/homework', homeworkRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/qa', qaRoutes);
 
 // Health check
 app.get('/', (req, res) => {

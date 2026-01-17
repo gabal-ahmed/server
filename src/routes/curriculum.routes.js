@@ -9,6 +9,7 @@ router.get('/stats', authenticate, authorize(['TEACHER', 'ADMIN']), curriculumCo
 
 // Public read (or authenticated student)
 router.get('/stages', curriculumController.getStages);
+router.get('/lessons', authenticate, curriculumController.getLessons); // Add this BEFORE :id
 router.get('/subjects/:id', authenticate, curriculumController.getSubject); // Auth required for progress
 router.get('/lessons/:id', authenticate, curriculumController.getLesson); // Protected content
 

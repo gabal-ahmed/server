@@ -3,7 +3,7 @@ import prisma from '../prisma.js';
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: No token provided' });
   }
@@ -18,7 +18,7 @@ export const authenticate = async (req, res, next) => {
       select: { id: true, role: true, email: true, isActive: true, name: true }
     });
 
-    if (!user ||!user.isActive) {
+    if (!user || !user.isActive) {
       return res.status(401).json({ error: 'Unauthorized: Invalid or inactive user' });
     }
 

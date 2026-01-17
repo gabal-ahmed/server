@@ -26,6 +26,7 @@ async function main() {
       password: hashedPassword,
       name,
       role: 'ADMIN',
+      isActive: true, // Admin should be active by default
     },
   });
 

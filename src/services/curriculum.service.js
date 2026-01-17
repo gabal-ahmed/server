@@ -5,10 +5,10 @@ export const getStages = async () => {
   return prisma.stage.findMany({
     include: {
       grades: {
-        include: { 
+        include: {
           subjects: {
             include: { units: true }
-          } 
+          }
         }
       }
     }
@@ -36,17 +36,17 @@ export const getSubject = async (id, userId) => {
       units: {
         include: {
           lessons: {
-             select: { 
-                 id: true, 
-                 title: true, 
-                 createdAt: true,
-                 published: true, // Need to know status
-                 isDeleted: true,
-                 progress: {
-                     where: { userId: userId || 'no-user' },
-                     select: { completed: true }
-                 }
-             } 
+            select: {
+              id: true,
+              title: true,
+              createdAt: true,
+              published: true, // Need to know status
+              isDeleted: true,
+              progress: {
+                where: { userId: userId || 'no-user' },
+                select: { completed: true }
+              }
+            }
           }
         }
       }
@@ -57,19 +57,19 @@ export const getSubject = async (id, userId) => {
 
   // Transform structure to flatten progress
   const units = subject.units.map(unit => ({
-      ...unit,
-      lessons: unit.lessons
-        .filter(lesson => !lesson.isDeleted)
-        .map(lesson => ({
-          ...lesson,
-          completed: lesson.progress?.[0]?.completed || false,
-          progress: undefined // remove raw array
-        }))
-        // Filter: If I am a student, I should only see published?
-        // Wait, 'userId' here is generic. We need role too.
-        // For now, let's return everything and let Controller filter or Frontend filter.
-        // Actually, safer to filter here if we had role.
-        // Let's just expose 'published' field and filter in Controller if needed.
+    ...unit,
+    lessons: unit.lessons
+      .filter(lesson => !lesson.isDeleted)
+      .map(lesson => ({
+        ...lesson,
+        completed: lesson.progress?.[0]?.completed || false,
+        progress: undefined // remove raw array
+      }))
+    // Filter: If I am a student, I should only see published?
+    // Wait, 'userId' here is generic. We need role too.
+    // For now, let's return everything and let Controller filter or Frontend filter.
+    // Actually, safer to filter here if we had role.
+    // Let's just expose 'published' field and filter in Controller if needed.
   }));
 
   return { ...subject, units };
@@ -99,6 +99,18 @@ export const createLesson = async (data) => {
 
 
 
+
+export const getLessons = async () => {
+  return prisma.lesson.findMany({
+    where: { isDeleted: false },
+    select: {
+      id: true,
+      title: true
+    },
+    orderBy: { title: 'asc' }
+  });
+};
+
 export const getLesson = async (id, userId) => {
   const lesson = await prisma.lesson.findUnique({
     where: { id },
@@ -115,7 +127,7 @@ export const getLesson = async (id, userId) => {
   let progress = null;
   if (userId) {
     progress = await prisma.studentLessonProgress.findUnique({
-        where: { userId_lessonId: { userId, lessonId: id } }
+      where: { userId_lessonId: { userId, lessonId: id } }
     });
   }
 
@@ -138,21 +150,21 @@ export const getTeacherStats = async (teacherId) => {
 
 // --- PROGRESS ---
 export const markLessonComplete = async (userId, lessonId) => {
-    return prisma.studentLessonProgress.upsert({
-      where: {
-        userId_lessonId: {
-          userId,
-          lessonId
-        }
-      },
-      update: {
-        completed: true,
-        lastViewedAt: new Date()
-      },
-      create: {
+  return prisma.studentLessonProgress.upsert({
+    where: {
+      userId_lessonId: {
         userId,
-        lessonId,
-        completed: true
+        lessonId
       }
-    });
+    },
+    update: {
+      completed: true,
+      lastViewedAt: new Date()
+    },
+    create: {
+      userId,
+      lessonId,
+      completed: true
+    }
+  });
 };

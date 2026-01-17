@@ -69,8 +69,8 @@ export const getSubject = async (req, res) => {
     // Ensure auth middleware populates req.user if present, or handle unauth.
     // If not authenticated, they just see no progress.
     const userId = req.user?.id;
-    const subject = await curriculumService.getSubject(req.params.id, userId);  
-    
+    const subject = await curriculumService.getSubject(req.params.id, userId);
+
     if (!subject) return res.status(404).json({ error: 'Subject not found' });
     res.json(subject);
   } catch (error) {
@@ -100,13 +100,23 @@ export const getLesson = async (req, res) => {
   }
 };
 
+
+export const getLessons = async (req, res) => {
+  try {
+    const lessons = await curriculumService.getLessons();
+    res.json(lessons);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const markComplete = async (req, res) => {
-    try {
-        await curriculumService.markLessonComplete(req.user.id, req.params.id);
-        res.json({ message: 'Marked as complete' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    await curriculumService.markLessonComplete(req.user.id, req.params.id);
+    res.json({ message: 'Marked as complete' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
 
 export const getStats = async (req, res) => {

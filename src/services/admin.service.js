@@ -1,4 +1,5 @@
 import prisma from '../prisma.js';
+import { notifyUserOfApproval, notifyUserOfRejection } from '../utils/email.js';
 
 export const logActivity = async (data) => {
     return prisma.activityLog.create({
@@ -71,4 +72,48 @@ export const getGlobalReports = async () => {
         },
         systemHealth: "OK"
     };
+};
+
+export const getPendingUsers = async () => {
+    const users = await prisma.user.findMany({
+        where: { 
+            isActive: false, 
+            isDeleted: false 
+        },
+        select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            createdAt: true
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+    
+    console.log(`Found ${users.length} pending users`);
+    return users;
+};
+
+export const approveUser = async (userId) => {
+    const user = await prisma.user.update({
+        where: { id: userId },
+        data: { isActive: true }
+    });
+
+    // Notify user of approval
+    notifyUserOfApproval(user).catch(console.error);
+
+    return user;
+};
+
+export const rejectUser = async (userId) => {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (user) {
+        await prisma.user.delete({ where: { id: userId } });
+        // Notify user of rejection
+        notifyUserOfRejection(user.email, user.name).catch(console.error);
+    }
+
+    return { success: true };
 };

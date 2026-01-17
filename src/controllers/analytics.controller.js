@@ -5,9 +5,14 @@ export const getStats = async (req, res) => {
     if (req.user.role === 'STUDENT') {
       const stats = await analyticsService.getStudentAnalytics(req.user.id);
       return res.json(stats);
-    } 
-    
-    if (req.user.role === 'TEACHER' || req.user.role === 'ADMIN') {
+    }
+
+    if (req.user.role === 'ADMIN') {
+      const stats = await analyticsService.getAdminAnalytics();
+      return res.json(stats);
+    }
+
+    if (req.user.role === 'TEACHER') {
       const stats = await analyticsService.getTeacherAnalytics(req.user.id);
       return res.json(stats);
     }
