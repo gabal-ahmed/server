@@ -18,4 +18,10 @@ router.post('/unsubscribe', authenticate, authorize(['STUDENT']), subController.
 router.get('/my-students', authenticate, authorize(['TEACHER']), subController.getMyStudents);
 router.get('/my-students/results', authenticate, authorize(['TEACHER']), subController.getMyStudentsResults);
 
+// Teacher: Requests
+router.get('/requests', authenticate, authorize(['TEACHER']), subController.getPendingRequests);
+router.post('/approve', authenticate, authorize(['TEACHER']), subController.approveSubscription);
+router.post('/reject', authenticate, authorize(['TEACHER']), subController.rejectSubscription);
+router.post('/remove-student', authenticate, authorize(['TEACHER']), subController.removeStudent);
+
 export default router;

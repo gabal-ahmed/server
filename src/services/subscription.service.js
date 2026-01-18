@@ -1,11 +1,57 @@
 import prisma from '../prisma.js';
 
+
+
 export const subscribe = async (studentId, teacherId) => {
   return prisma.subscription.create({
     data: {
       studentId,
-      teacherId
+      teacherId,
+      status: 'PENDING'
     }
+  });
+};
+
+export const approveSubscription = async (studentId, teacherId) => {
+  return prisma.subscription.update({
+    where: {
+      studentId_teacherId: {
+        studentId,
+        teacherId
+      }
+    },
+    data: { status: 'APPROVED' }
+  });
+};
+
+export const rejectSubscription = async (studentId, teacherId) => {
+  return prisma.subscription.delete({
+    where: {
+      studentId_teacherId: {
+        studentId,
+        teacherId
+      }
+    }
+  });
+};
+
+export const getPendingRequests = async (teacherId) => {
+  return prisma.subscription.findMany({
+    where: {
+      teacherId,
+      status: 'PENDING'
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
   });
 };
 
@@ -54,10 +100,12 @@ export const getAllTeachers = async (studentId) => {
   });
 
   const subSet = new Set(mySubscriptions.map(s => s.teacherId));
+  const pendingSet = new Set(mySubscriptions.filter(s => s.status === 'PENDING').map(s => s.teacherId));
 
   return teachers.map(t => ({
     ...t,
     isSubscribed: subSet.has(t.id),
+    isPending: pendingSet.has(t.id),
     lessonCount: t.createdLessons.length,
     quizCount: t.createdQuizzes.length
   }));
@@ -66,15 +114,15 @@ export const getAllTeachers = async (studentId) => {
 export const getSubscribedLessons = async (studentId) => {
   // Find all teachers I follow
   const subscriptions = await prisma.subscription.findMany({
-    where: { studentId },
+    where: { studentId, status: 'APPROVED' },
     select: { teacherId: true }
   });
-  
+
   const teacherIds = subscriptions.map(s => s.teacherId);
-  
+
   // Find lessons by these teachers (only published and not deleted)
   return prisma.lesson.findMany({
-    where: { 
+    where: {
       teacherId: { in: teacherIds },
       published: true,
       isDeleted: false
@@ -86,20 +134,20 @@ export const getSubscribedLessons = async (studentId) => {
 
 export const getSubscribedQuizzes = async (studentId) => {
   const subscriptions = await prisma.subscription.findMany({
-    where: { studentId },
+    where: { studentId, status: 'APPROVED' },
     select: { teacherId: true }
   });
-  
+
   const teacherIds = subscriptions.map(s => s.teacherId);
-  
+
   // Find quizzes by these teachers (only published and not deleted)
   return prisma.quiz.findMany({
-    where: { 
+    where: {
       teacherId: { in: teacherIds },
       published: true,
       isDeleted: false
     },
-    include: { 
+    include: {
       teacher: { select: { name: true } },
       questions: { select: { id: true } } // just to count questions
     },
@@ -109,11 +157,12 @@ export const getSubscribedQuizzes = async (studentId) => {
 
 // Teacher: Get My Students (subscribed to me)
 export const getMyStudents = async (teacherId, params = {}) => {
-  const { page = 1, limit = 10, search = '' } = params;
+  const { page = 1, limit = 10, search = '', sort = 'latest' } = params;
   const skip = (page - 1) * limit;
 
   const where = {
     teacherId,
+    status: 'APPROVED',
     ...(search ? {
       student: {
         OR: [
@@ -139,7 +188,12 @@ export const getMyStudents = async (teacherId, params = {}) => {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy:
+        sort === 'name_asc' ? { student: { name: 'asc' } } :
+          sort === 'name_desc' ? { student: { name: 'desc' } } :
+            sort === 'oldest' ? { createdAt: 'asc' } :
+              { createdAt: 'desc' } // latest
+
     }),
     prisma.subscription.count({ where })
   ]);
@@ -176,9 +230,15 @@ export const getMyStudentsResults = async (teacherId, params = {}) => {
   // Determine sort order
   let orderBy = {};
   if (sort === 'score_asc') {
-    orderBy = { result: { score: 'asc' } };
+    orderBy = [
+      { result: { percentage: 'asc' } },
+      { completedAt: 'desc' }
+    ];
   } else if (sort === 'score_desc') {
-    orderBy = { result: { score: 'desc' } };
+    orderBy = [
+      { result: { percentage: 'desc' } },
+      { completedAt: 'desc' }
+    ];
   } else {
     orderBy = { completedAt: 'desc' };
   }
@@ -206,7 +266,8 @@ export const getMyStudentsResults = async (teacherId, params = {}) => {
           select: {
             score: true,
             total: true,
-            passed: true
+            passed: true,
+            percentage: true
           }
         }
       },
@@ -224,6 +285,7 @@ export const getMyStudentsResults = async (teacherId, params = {}) => {
     quizTitle: attempt.quiz.title,
     score: attempt.result?.score || 0,
     total: attempt.result?.total || 0,
+    percentage: attempt.result?.percentage || 0,
     passed: attempt.result?.passed || false,
     completedAt: attempt.completedAt,
     attemptId: attempt.id

@@ -15,11 +15,11 @@ export const authenticate = async (req, res, next) => {
     // Fetch user to ensure exists and is active
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, role: true, email: true, isActive: true, name: true }
+      select: { id: true, role: true, email: true, isActive: true, name: true, isBlocked: true }
     });
 
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: 'Unauthorized: Invalid or inactive user' });
+    if (!user || !user.isActive || user.isBlocked) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid, inactive, or blocked user' });
     }
 
     req.user = user;

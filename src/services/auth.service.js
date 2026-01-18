@@ -55,6 +55,10 @@ export const login = async ({ email, password }) => {
     throw new Error('Account pending admin approval');
   }
 
+  if (user.isBlocked) {
+    throw new Error('Your account has been blocked. Please contact an administrator.');
+  }
+
   const isValid = await comparePassword(password, user.password);
   if (!isValid) {
     throw new Error('Invalid credentials');

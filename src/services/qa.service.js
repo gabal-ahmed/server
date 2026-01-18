@@ -2,12 +2,12 @@ import prisma from '../prisma.js';
 
 // Get all questions with filters
 export const getQuestions = async (params = {}) => {
-    const { 
-        lessonId, 
-        subjectId, 
-        authorId, 
-        search, 
-        page = 1, 
+    const {
+        lessonId,
+        subjectId,
+        authorId,
+        search,
+        page = 1,
         limit = 20,
         sortBy = 'createdAt',
         sortOrder = 'desc'
@@ -170,9 +170,29 @@ export const getQuestionById = async (questionId, userId = null) => {
     };
 };
 
+// Helper to check for banned words
+const checkContent = async (text) => {
+    const config = await prisma.systemConfig.findUnique({ where: { id: 'singleton' } });
+    const bannedWords = config?.bannedWords || [];
+
+    if (bannedWords.length === 0) return;
+
+    // Split text by delimiters (spaces, punctuation, newlines)
+    // This allows for "word" matching instead of "substring" matching
+    const wordsInText = text.toLowerCase().split(/[\s\n\r\t.,!?;:()\[\]"']+/);
+
+    for (const banned of bannedWords) {
+        if (wordsInText.includes(banned.toLowerCase())) {
+            throw new Error(`Content contains banned word: ${banned}`);
+        }
+    }
+};
+
 // Create question
 export const createQuestion = async (data) => {
     const { title, content, lessonId, subjectId, authorId } = data;
+
+    await checkContent(title + ' ' + content);
 
     // Clean up empty strings - convert to null
     const cleanLessonId = lessonId && lessonId.trim() !== '' ? lessonId : null;
@@ -219,6 +239,8 @@ export const updateQuestion = async (questionId, data, authorId) => {
         throw new Error('You can only edit your own questions');
     }
 
+    await checkContent(data.title + ' ' + data.content);
+
     return prisma.questionQA.update({
         where: { id: questionId },
         data: {
@@ -257,6 +279,8 @@ export const deleteQuestion = async (questionId, authorId) => {
 // Create answer
 export const createAnswer = async (data) => {
     const { content, questionId, authorId } = data;
+
+    await checkContent(content);
 
     // Verify question exists
     const question = await prisma.questionQA.findUnique({
@@ -297,6 +321,8 @@ export const updateAnswer = async (answerId, data, authorId) => {
     if (answer.authorId !== authorId) {
         throw new Error('You can only edit your own answers');
     }
+
+    await checkContent(data.content);
 
     return prisma.answerQA.update({
         where: { id: answerId },

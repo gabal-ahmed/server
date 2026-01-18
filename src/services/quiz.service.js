@@ -34,12 +34,12 @@ export const updateQuiz = async (id, data) => {
     const existingAttempts = await prisma.quizAttempt.count({
       where: { quizId: id }
     });
-    
+
     if (existingAttempts > 0) {
       throw new Error('Cannot unpublish quiz: Students have already attempted this quiz');
     }
   }
-  
+
   return prisma.quiz.update({
     where: { id },
     data: {
@@ -78,9 +78,9 @@ export const createQuiz = async (data) => {
 };
 
 export const addQuestion = async (quizId, data) => {
-  const { text, type, points, options } = data; 
+  const { text, type, points, options } = data;
   // options: [{ text: "A", isCorrect: true }, ...]
-  
+
   return prisma.question.create({
     data: {
       quizId,
@@ -127,12 +127,12 @@ export const startAttempt = async (userId, quizId) => {
   // If there is an existing attempt, we should return it or error?
   // User wants "cannot take it again". So if it exists (even if incomplete?), let's return it or error.
   // Ideally if incomplete, resume. If complete, error.
-  
+
   if (existingUnknown) {
-      if (existingUnknown.completedAt) {
-          throw new Error('Quiz already completed');
-      }
-      return existingUnknown; // Resume existing attempt
+    if (existingUnknown.completedAt) {
+      throw new Error('Quiz already completed');
+    }
+    return existingUnknown; // Resume existing attempt
   }
 
   return prisma.quizAttempt.create({
@@ -145,7 +145,7 @@ export const startAttempt = async (userId, quizId) => {
 
 export const submitAttempt = async (attemptId, answers) => {
   // answers: [{ questionId, selectedOptionId }]
-  
+
   const attempt = await prisma.quizAttempt.findUnique({
     where: { id: attemptId },
     include: { quiz: { include: { questions: { include: { options: true } } } } }
@@ -156,7 +156,7 @@ export const submitAttempt = async (attemptId, answers) => {
 
   let totalScore = 0;
   let earnedScore = 0;
-  
+
   const questionsMap = new Map();
   attempt.quiz.questions.forEach(q => {
     questionsMap.set(q.id, q);
@@ -175,10 +175,10 @@ export const submitAttempt = async (attemptId, answers) => {
 
     const question = questionsMap.get(ans.questionId);
     if (question && ans.selectedOptionId) {
-       const selectedOption = question.options.find(o => o.id === ans.selectedOptionId);
-       if (selectedOption && selectedOption.isCorrect) {
-         earnedScore += question.points;
-       }
+      const selectedOption = question.options.find(o => o.id === ans.selectedOptionId);
+      if (selectedOption && selectedOption.isCorrect) {
+        earnedScore += question.points;
+      }
     }
   }
 
@@ -198,7 +198,8 @@ export const submitAttempt = async (attemptId, answers) => {
       userId: attempt.userId,
       quizId: attempt.quizId,
       attemptId: attempt.id,
-      passed
+      passed,
+      percentage: (earnedScore / totalScore) * 100
     }
   });
 
@@ -220,7 +221,7 @@ export const getAttemptReview = async (userId, attemptId) => {
         include: {
           questions: {
             include: {
-               options: true
+              options: true
             }
           }
         }
@@ -238,14 +239,14 @@ export const getAttemptReview = async (userId, attemptId) => {
 };
 
 export const getQuizResults = async (quizId) => {
-    return prisma.quizAttempt.findMany({
-        where: { quizId, completedAt: { not: null } },
-        include: {
-            user: {
-                select: { name: true, email: true }
-            },
-            result: true
-        },
-        orderBy: { completedAt: 'desc' }
-    });
+  return prisma.quizAttempt.findMany({
+    where: { quizId, completedAt: { not: null } },
+    include: {
+      user: {
+        select: { name: true, email: true }
+      },
+      result: true
+    },
+    orderBy: { completedAt: 'desc' }
+  });
 };

@@ -26,6 +26,47 @@ export const unsubscribe = async (req, res) => {
   }
 };
 
+export const approveSubscription = async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    await subscriptionService.approveSubscription(studentId, req.user.id);
+    res.json({ message: 'Subscription approved' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const rejectSubscription = async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    await subscriptionService.rejectSubscription(studentId, req.user.id);
+    res.json({ message: 'Subscription rejected' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const removeStudent = async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    // We can reuse unsubscribe or rejectSubscription since they do the same thing (delete)
+    // But let's keep it semantic.
+    await subscriptionService.unsubscribe(studentId, req.user.id);
+    res.json({ message: 'Student removed successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getPendingRequests = async (req, res) => {
+  try {
+    const requests = await subscriptionService.getPendingRequests(req.user.id);
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const getMyTeachers = async (req, res) => {
   try {
     const subs = await subscriptionService.getMyTeachers(req.user.id);
@@ -69,7 +110,8 @@ export const getMyStudents = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const search = req.query.search || '';
 
-    const result = await subscriptionService.getMyStudents(req.user.id, { page, limit, search });
+    const sort = req.query.sort || 'latest';
+    const result = await subscriptionService.getMyStudents(req.user.id, { page, limit, search, sort });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
