@@ -22,6 +22,7 @@ model User {
   lessonsCompleted StudentLessonProgress[]
   quizAttempts     QuizAttempt[]
   results          Result[]
+  notifications    Notification[]
 
   createdLessons Lesson[]
   createdQuizzes Quiz[]
@@ -210,9 +211,9 @@ model Result {
   attemptId String      @unique
   attempt   QuizAttempt @relation(fields: [attemptId], references: [id])
 
-  passed    Boolean
+  passed     Boolean
   percentage Float    @default(0)
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 }
 
 model StudentLessonProgress {
@@ -372,4 +373,16 @@ model AnswerVote {
   createdAt DateTime @default(now())
 
   @@unique([answerId, userId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String // SUBSCRIPTION, CONTENT, QA, GRADE, SYSTEM
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

@@ -6,11 +6,10 @@ const router = express.Router();
 
 // Only teachers and admins can access the bank
 router.use(authenticate);
-router.use(authorize(['TEACHER', 'ADMIN']));
-
-router.get('/', bankController.getQuestions);
-router.post('/', bankController.createQuestion);
-router.delete('/:id', bankController.deleteQuestion);
-router.post('/import', bankController.importToQuiz);
+// Everyone authenticated can view, but only TEACHER/ADMIN can modify
+router.get('/', authorize(['TEACHER', 'ADMIN', 'STUDENT']), bankController.getQuestions);
+router.post('/', authorize(['TEACHER', 'ADMIN']), bankController.createQuestion);
+router.delete('/:id', authorize(['TEACHER', 'ADMIN']), bankController.deleteQuestion);
+router.post('/import', authorize(['TEACHER', 'ADMIN']), bankController.importToQuiz);
 
 export default router;

@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../middleware/authMiddleware.js';
 const router = express.Router();
 
 router.get('/teachers', authenticate, authorize(['STUDENT']), subController.getAllTeachers); // Browse
+router.get('/teachers/:id', authenticate, authorize(['STUDENT']), subController.getTeacherProfile); // Profile
 router.get('/my-teachers', authenticate, authorize(['STUDENT']), subController.getMyTeachers); // My List
 
 // New: Content Routes
@@ -17,6 +18,7 @@ router.post('/unsubscribe', authenticate, authorize(['STUDENT']), subController.
 // Teacher: My Students
 router.get('/my-students', authenticate, authorize(['TEACHER']), subController.getMyStudents);
 router.get('/my-students/results', authenticate, authorize(['TEACHER']), subController.getMyStudentsResults);
+router.get('/my-students/results-grouped', authenticate, authorize(['TEACHER']), subController.getMyStudentsResultsGrouped);
 
 // Teacher: Requests
 router.get('/requests', authenticate, authorize(['TEACHER']), subController.getPendingRequests);

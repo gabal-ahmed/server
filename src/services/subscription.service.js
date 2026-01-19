@@ -1,30 +1,66 @@
 import prisma from '../prisma.js';
+import { createNotification } from './notification.service.js';
 
 
 
 export const subscribe = async (studentId, teacherId) => {
-  return prisma.subscription.create({
-    data: {
-      studentId,
-      teacherId,
-      status: 'PENDING'
-    }
+  const [subscription, student] = await Promise.all([
+    prisma.subscription.create({
+      data: {
+        studentId,
+        teacherId,
+        status: 'PENDING'
+      }
+    }),
+    prisma.user.findUnique({ where: { id: studentId } })
+  ]);
+
+  // Notify Teacher
+  await createNotification(teacherId, {
+    title: 'New Subscription Request',
+    message: `${student.name} wants to join your classes.`,
+    type: 'SUBSCRIPTION',
+    link: '/teacher/students'
   });
+
+  return subscription;
 };
 
 export const approveSubscription = async (studentId, teacherId) => {
-  return prisma.subscription.update({
-    where: {
-      studentId_teacherId: {
-        studentId,
-        teacherId
-      }
-    },
-    data: { status: 'APPROVED' }
+  const [subscription, teacher] = await Promise.all([
+    prisma.subscription.update({
+      where: {
+        studentId_teacherId: {
+          studentId,
+          teacherId
+        }
+      },
+      data: { status: 'APPROVED' }
+    }),
+    prisma.user.findUnique({ where: { id: teacherId } })
+  ]);
+
+  // Notify Student
+  await createNotification(studentId, {
+    title: 'Subscription Approved',
+    message: `Teacher ${teacher.name} has approved your subscription.`,
+    type: 'SUBSCRIPTION',
+    link: '/student/teachers'
   });
+
+  return subscription;
 };
 
 export const rejectSubscription = async (studentId, teacherId) => {
+  const teacher = await prisma.user.findUnique({ where: { id: teacherId } });
+
+  // Notify Student before deleting
+  await createNotification(studentId, {
+    title: 'Subscription Rejected',
+    message: `Teacher ${teacher.name} has declined your subscription request.`,
+    type: 'SUBSCRIPTION'
+  });
+
   return prisma.subscription.delete({
     where: {
       studentId_teacherId: {
@@ -52,7 +88,16 @@ export const getPendingRequests = async (teacherId) => {
       }
     },
     orderBy: { createdAt: 'desc' }
-  });
+  }).then(requests => requests.map(req => ({
+    ...req,
+    student: {
+      id: req.student.id,
+      user: {
+        name: req.student.name,
+        email: req.student.email
+      }
+    }
+  })));
 };
 
 export const unsubscribe = async (studentId, teacherId) => {
@@ -73,8 +118,12 @@ export const getMyTeachers = async (studentId) => {
           id: true,
           name: true,
           email: true,
-          createdLessons: { select: { id: true } }, // Count
-          createdQuizzes: { select: { id: true } }  // Count
+          _count: {
+            select: {
+              createdLessons: { where: { published: true, isDeleted: false } },
+              createdQuizzes: { where: { published: true, isDeleted: false } }
+            }
+          }
         }
       }
     }
@@ -84,30 +133,38 @@ export const getMyTeachers = async (studentId) => {
 export const getAllTeachers = async (studentId) => {
   // Get all teachers and check if subscribed
   const teachers = await prisma.user.findMany({
-    where: { role: 'TEACHER' },
+    where: { role: 'TEACHER', isDeleted: false },
     select: {
       id: true,
       name: true,
       email: true,
-      createdLessons: { select: { id: true } },
-      createdQuizzes: { select: { id: true } }
+      _count: {
+        select: {
+          createdLessons: { where: { published: true, isDeleted: false } },
+          createdQuizzes: { where: { published: true, isDeleted: false } }
+        }
+      }
     }
   });
 
   const mySubscriptions = await prisma.subscription.findMany({
     where: { studentId },
-    select: { teacherId: true }
+    select: { teacherId: true, status: true }
   });
 
-  const subSet = new Set(mySubscriptions.map(s => s.teacherId));
+  const subSet = new Set(mySubscriptions.filter(s => s.status === 'APPROVED').map(s => s.teacherId));
   const pendingSet = new Set(mySubscriptions.filter(s => s.status === 'PENDING').map(s => s.teacherId));
 
   return teachers.map(t => ({
     ...t,
     isSubscribed: subSet.has(t.id),
     isPending: pendingSet.has(t.id),
-    lessonCount: t.createdLessons.length,
-    quizCount: t.createdQuizzes.length
+    // Map Prisma property names to what the frontend expects if needed, 
+    // but the frontend is already using _count.createdLessons/createdQuizzes
+    _count: {
+      lessons: t._count.createdLessons,
+      quizzes: t._count.createdQuizzes
+    }
   }));
 };
 
@@ -184,7 +241,13 @@ export const getMyStudents = async (teacherId, params = {}) => {
             id: true,
             name: true,
             email: true,
-            createdAt: true
+            createdAt: true,
+            _count: {
+              select: {
+                quizAttempts: { where: { quiz: { teacherId } } },
+                submissions: { where: { assignment: { teacherId } } }
+              }
+            }
           }
         }
       },
@@ -198,8 +261,54 @@ export const getMyStudents = async (teacherId, params = {}) => {
     prisma.subscription.count({ where })
   ]);
 
-  const students = subscriptions.map(sub => sub.student);
+  const students = subscriptions.map(sub => ({
+    id: sub.student.id,
+    createdAt: sub.student.createdAt,
+    user: {
+      name: sub.student.name,
+      email: sub.student.email
+    },
+    _count: {
+      quizAttempts: sub.student._count.quizAttempts,
+      homeworkSubmissions: sub.student._count.submissions
+    }
+  }));
   return { students, total, page, limit, pages: Math.ceil(total / limit) };
+};
+
+export const getMyStudentsResultsGrouped = async (teacherId) => {
+  // Get all quizzes by this teacher that have attempts from students
+  const quizzes = await prisma.quiz.findMany({
+    where: { teacherId, isDeleted: false },
+    include: {
+      questions: { select: { id: true } },
+      attempts: {
+        where: { completedAt: { not: null } },
+        include: {
+          user: { select: { id: true, name: true } },
+          result: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  // Format to match frontend: { id, title, questions: [], attempts: [ { id, student: { user: { name } }, score, createdAt } ] }
+  return quizzes.map(quiz => ({
+    id: quiz.id,
+    title: quiz.title,
+    questions: quiz.questions,
+    attempts: quiz.attempts.map(attempt => ({
+      id: attempt.id,
+      score: attempt.result?.score || 0,
+      createdAt: attempt.completedAt,
+      student: {
+        user: {
+          name: attempt.user.name
+        }
+      }
+    }))
+  }));
 };
 
 // Teacher: Get Student Results (only my quizzes)
@@ -292,4 +401,44 @@ export const getMyStudentsResults = async (teacherId, params = {}) => {
   }));
 
   return { results, total, page, limit, pages: Math.ceil(total / limit) };
+};
+
+export const getTeacherProfile = async (studentId, teacherId) => {
+  const teacher = await prisma.user.findFirst({
+    where: { id: teacherId, role: 'TEACHER', isDeleted: false },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      createdAt: true,
+      createdLessons: {
+        where: { published: true, isDeleted: false },
+        select: { id: true, title: true, createdAt: true, videoUrl: true }
+      },
+      createdQuizzes: {
+        where: { published: true, isDeleted: false },
+        select: { id: true, title: true, createdAt: true, _count: { select: { questions: true } } }
+      }
+    }
+  });
+
+  if (!teacher) throw new Error('Teacher not found');
+
+  const subscription = await prisma.subscription.findUnique({
+    where: { studentId_teacherId: { studentId, teacherId } }
+  });
+
+  return {
+    ...teacher,
+    isSubscribed: subscription?.status === 'APPROVED',
+    isPending: subscription?.status === 'PENDING'
+  };
+};
+
+export const getApprovedStudentIds = async (teacherId) => {
+  const subscriptions = await prisma.subscription.findMany({
+    where: { teacherId, status: 'APPROVED' },
+    select: { studentId: true }
+  });
+  return subscriptions.map(s => s.studentId);
 };

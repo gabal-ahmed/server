@@ -1,4 +1,6 @@
 import prisma from '../prisma.js';
+import { createNotification } from './notification.service.js';
+import { getApprovedStudentIds } from './subscription.service.js';
 
 export const getMyQuizzes = async (teacherId, params = {}) => {
   const { page = 1, limit = 10, search = '' } = params;
@@ -53,7 +55,7 @@ export const updateQuiz = async (id, data) => {
 
 export const createQuiz = async (data) => {
   const { title, description, teacherId, lessonId, questions } = data;
-  return prisma.quiz.create({
+  const quiz = await prisma.quiz.create({
     data: {
       title,
       description,
@@ -72,9 +74,25 @@ export const createQuiz = async (data) => {
       }
     },
     include: {
-      questions: { include: { options: true } }
+      questions: { include: { options: true } },
+      teacher: { select: { name: true } }
     }
   });
+
+  // Notify students if published
+  if (quiz.published) {
+    const studentIds = await getApprovedStudentIds(teacherId);
+    await Promise.all(studentIds.map(sid =>
+      createNotification(sid, {
+        title: 'New Quiz Available',
+        message: `Teacher ${quiz.teacher.name} added a new quiz: ${quiz.title}`,
+        type: 'CONTENT',
+        link: '/student/quizzes'
+      })
+    ));
+  }
+
+  return quiz;
 };
 
 export const addQuestion = async (quizId, data) => {
@@ -200,7 +218,19 @@ export const submitAttempt = async (attemptId, answers) => {
       attemptId: attempt.id,
       passed,
       percentage: (earnedScore / totalScore) * 100
+    },
+    include: {
+      user: { select: { name: true } },
+      quiz: { select: { title: true, teacherId: true } }
     }
+  });
+
+  // Notify Teacher
+  await createNotification(result.quiz.teacherId, {
+    title: 'Quiz Completed',
+    message: `${result.user.name} completed the quiz: ${result.quiz.title}`,
+    type: 'CONTENT',
+    link: `/teacher/quizzes/${result.quizId}/results`
   });
 
   return result;
@@ -213,7 +243,7 @@ export const getResults = async (userId) => {
   });
 };
 
-export const getAttemptReview = async (userId, attemptId) => {
+export const getAttemptReview = async (user, attemptId) => {
   const attempt = await prisma.quizAttempt.findUnique({
     where: { id: attemptId },
     include: {
@@ -232,8 +262,12 @@ export const getAttemptReview = async (userId, attemptId) => {
   });
 
   if (!attempt) throw new Error('Attempt not found');
-  // Allow if user is owner OR teacher/admin (simplified for now to just owner check, or let controller handle higher roles)
-  if (attempt.userId !== userId) throw new Error('Unauthorized');
+
+  // Allow if user is owner OR teacher/admin
+  const isOwner = attempt.userId === user.id;
+  const isPrivileged = ['TEACHER', 'ADMIN'].includes(user.role);
+
+  if (!isOwner && !isPrivileged) throw new Error('Unauthorized');
 
   return attempt;
 };

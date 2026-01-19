@@ -14,12 +14,18 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import configRoutes from './routes/config.routes.js';
 import qaRoutes from './routes/qa.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
 
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
+  })
+);
 app.use(morgan('dev'));
 app.use(express.json());
 app.use('/uploads', express.static('uploads')); // Serve uploaded files
@@ -37,6 +43,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/qa', qaRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/', (req, res) => {

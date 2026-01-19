@@ -1,4 +1,6 @@
 import prisma from '../prisma.js';
+import { createNotification } from './notification.service.js';
+import { getApprovedStudentIds } from './subscription.service.js';
 
 // --- STAGES ---
 export const getStages = async () => {
@@ -83,7 +85,7 @@ export const createUnit = async (name, subjectId) => {
 // --- LESSONS ---
 export const createLesson = async (data) => {
   const { title, unitId, teacherId, content, videoUrl, pdfUrl } = data;
-  return prisma.lesson.create({
+  const lesson = await prisma.lesson.create({
     data: {
       title,
       unitId,
@@ -92,8 +94,24 @@ export const createLesson = async (data) => {
       videoUrl,
       pdfUrl,
       published: data.published || false
-    }
+    },
+    include: { teacher: { select: { name: true } } }
   });
+
+  // Notify students if published
+  if (lesson.published) {
+    const studentIds = await getApprovedStudentIds(teacherId);
+    await Promise.all(studentIds.map(sid =>
+      createNotification(sid, {
+        title: 'New Lesson Available',
+        message: `Teacher ${lesson.teacher.name} added a new lesson: ${lesson.title}`,
+        type: 'CONTENT',
+        link: `/student/lessons/${lesson.id}`
+      })
+    ));
+  }
+
+  return lesson;
 };
 
 

@@ -1,4 +1,5 @@
 import prisma from '../prisma.js';
+import { createNotification } from './notification.service.js';
 
 // Get all questions with filters
 export const getQuestions = async (params = {}) => {
@@ -203,7 +204,7 @@ export const createQuestion = async (data) => {
     //     throw new Error('Question must be associated with either a lesson or subject');
     // }
 
-    return prisma.questionQA.create({
+    const question = await prisma.questionQA.create({
         data: {
             title,
             content,
@@ -216,13 +217,25 @@ export const createQuestion = async (data) => {
                 select: { id: true, name: true, role: true }
             },
             lesson: {
-                select: { id: true, title: true }
+                select: { id: true, title: true, teacherId: true }
             },
             subject: {
                 select: { id: true, name: true }
             }
         }
     });
+
+    // Notify Teacher if lesson question
+    if (question.lesson?.teacherId && question.authorId !== question.lesson.teacherId) {
+        await createNotification(question.lesson.teacherId, {
+            title: 'New Question',
+            message: `${question.author.name} asked a question in ${question.lesson.title}`,
+            type: 'QA',
+            link: `/student/qa`
+        });
+    }
+
+    return question;
 };
 
 // Update question
@@ -291,7 +304,7 @@ export const createAnswer = async (data) => {
         throw new Error('Question not found');
     }
 
-    return prisma.answerQA.create({
+    const answer = await prisma.answerQA.create({
         data: {
             content,
             questionId,
@@ -302,10 +315,22 @@ export const createAnswer = async (data) => {
                 select: { id: true, name: true, role: true }
             },
             question: {
-                select: { id: true, title: true }
+                select: { id: true, title: true, authorId: true }
             }
         }
     });
+
+    // Notify Question Author
+    if (answer.question.authorId !== answer.authorId) {
+        await createNotification(answer.question.authorId, {
+            title: 'New Answer',
+            message: `${answer.author.name} replied to your question: ${answer.question.title}`,
+            type: 'QA',
+            link: `/student/qa`
+        });
+    }
+
+    return answer;
 };
 
 // Update answer

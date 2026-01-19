@@ -63,7 +63,7 @@ export const getQuiz = async (req, res) => {
     } else {
       quiz = await quizService.getQuiz(req.params.id);
     }
-    
+
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
     res.json(quiz);
   } catch (error) {
@@ -140,7 +140,7 @@ export const getMyResults = async (req, res) => {
 
 export const getAttemptReview = async (req, res) => {
   try {
-    const attempt = await quizService.getAttemptReview(req.user.id, req.params.id);
+    const attempt = await quizService.getAttemptReview(req.user, req.params.id);
     res.json(attempt);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -148,10 +148,10 @@ export const getAttemptReview = async (req, res) => {
 };
 
 export const getQuizResults = async (req, res) => {
-    try {
-        const results = await quizService.getQuizResults(req.params.id);
-        res.json(results);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    const results = await quizService.getQuizResults(req.params.id);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };

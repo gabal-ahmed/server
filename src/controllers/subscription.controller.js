@@ -70,7 +70,13 @@ export const getPendingRequests = async (req, res) => {
 export const getMyTeachers = async (req, res) => {
   try {
     const subs = await subscriptionService.getMyTeachers(req.user.id);
-    res.json(subs.map(s => s.teacher));
+    res.json(subs.map(s => ({
+      ...s.teacher,
+      _count: {
+        lessons: s.teacher._count.createdLessons,
+        quizzes: s.teacher._count.createdQuizzes
+      }
+    })));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -136,5 +142,23 @@ export const getMyStudentsResults = async (req, res) => {
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+export const getMyStudentsResultsGrouped = async (req, res) => {
+  try {
+    const result = await subscriptionService.getMyStudentsResultsGrouped(req.user.id);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getTeacherProfile = async (req, res) => {
+  try {
+    const profile = await subscriptionService.getTeacherProfile(req.user.id, req.params.id);
+    res.json(profile);
+  } catch (error) {
+    res.status(error.message === 'Teacher not found' ? 404 : 500).json({ error: error.message });
   }
 };
